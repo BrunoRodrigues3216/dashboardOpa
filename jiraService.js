@@ -2,8 +2,8 @@ const express = require("express");
 const cors = require("cors");
 require('dotenv').config();
 
-const CLICKUP_TOKEN = process.env.CLICKUP_API_KEY;
-const LIST_ID = process.env.LIST_ID;
+const CLICKUP_TOKEN = "pk_94346531_ITLCP20YKAJK0QV52F1VU78CGOR94BBN";
+const LIST_ID = "901406307381";
 
 const app = express();
 app.use(cors());

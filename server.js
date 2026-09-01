@@ -21,10 +21,6 @@ app.get('/api/dashboard', async (req, res) => {
     }
 });
 
-// Rota de Teste de Vida
-app.get('/ping', (req, res) => {
-    res.send('Pong! O servidor atualizado está online!');
-});
 
 app.use((req, res) => {
     // Radar 2: Mostra no terminal qual rota o navegador tentou acessar
