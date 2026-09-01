@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 
 const distPath = path.join(__dirname, 'dist');
-console.log("-> Servindo arquivos da pasta:", distPath);
+console.log("-> Servindo arquivos da Pasta:", distPath);
 
 app.use(express.static(distPath));
 
