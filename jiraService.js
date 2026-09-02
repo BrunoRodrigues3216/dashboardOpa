@@ -1,132 +1,153 @@
-const express = require("express");
-const cors = require("cors");
 require('dotenv').config();
 
-const CLICKUP_TOKEN = "pk_94346531_ITLCP20YKAJK0QV52F1VU78CGOR94BBN";
-const LIST_ID = "901406307381";
-
-const app = express();
-app.use(cors());
-
+// 1. LISTA DE STATUS PERMITIDOS
 const STATUS_PERMITIDOS = [
-  "EN KICKOFF",
-  "EN ANALISIS META",
-  "EN CAPACITACIÓN",
-  "ACTIVACIÓN CANALES",
-  "POST ACTIVACIÓN",
+  "KICKOFF",
+  "TREINAMENTO",
+  "ATIVAÇÃO DE CANAIS",
+  "GO-LIVE",
+  "TELEFONIA",
+  "ACOMPANHAMENTO"
 ];
 
+// 2. PONTUAÇÃO (PESOS) DOS STATUS
 const PESOS = {
-  "EN KICKOFF": 5,
-  "EN ANALISIS META": 3,
-  "EN CAPACITACIÓN": 4,
-  "ACTIVACIÓN DE CANALES": 2,
-  "POST ACTIVACIÓN": 1,
+  "KICKOFF": 5,
+  "TREINAMENTO": 4,
+  "ATIVAÇÃO DE CANAIS": 3,
+  "TELEFONIA": 2,
+  "GO-LIVE": 1,
+  "ACOMPANHAMENTO": 1
 };
 
-const USUARIOS_IGNORADOS = [
-  "Jorthy Carvajal",
-  "Larissa Elizabeth",
-  "Maximiliano Azeglio",
+// 3. EQUIPE DO DASHBOARD (FILTRO EXCLUSIVO)
+const CONSULTORES_PERMITIDOS = [
+  "Luís Felipe de Carvalho Smidt",
+  "Bruno Gabriel Rodrigues",
+  "Warley Rubas",
+  "João Silva",
+  "Diogo Basílio",
+  "Luis Felipe Flores",
+  "alice.loreiro"
 ];
 
-const getClickUpData = async () => {
-  const queryParams = new URLSearchParams({
-    include_closed: "false",
-  }).toString();
+const getJiraData = async () => {
+  const jql = `statusCategory != Done`;
+  const auth = Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+  
+  let todasAsTarefas = []; 
+  let startAt = 0;         
+  const maxResults = 100;  
+  let temMais = true;      
 
-  const url = `https://api.clickup.com/api/v2/list/${LIST_ID}/task?${queryParams}`;
+  console.log("-> Iniciando busca no Jira. Aguarde...");
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: CLICKUP_TOKEN,
-        "Content-Type": "application/json",
-      },
-    });
+  while (temMais) {
+    const url = `https://${process.env.JIRA_DOMAIN}.atlassian.net/rest/agile/1.0/board/${process.env.JIRA_BOARD_ID}/issue?jql=${encodeURIComponent(jql)}&startAt=${startAt}&maxResults=${maxResults}`;
 
-    if (!response.ok) {
-      throw new Error(
-        `Erro na API do ClickUp: ${response.status} - ${response.statusText}`,
-      );
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Basic ${auth}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro API Jira: ${response.status} - ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.issues && data.issues.length > 0) {
+        todasAsTarefas = todasAsTarefas.concat(data.issues);
+        console.log(`-> Puxou ${data.issues.length} tarefas (Total até agora: ${todasAsTarefas.length} de ${data.total})`);
+        
+        startAt += data.issues.length; 
+        if (startAt >= data.total) temMais = false; 
+      } else {
+        temMais = false; 
+      }
+    } catch (error) {
+      console.error("Erro na requisição do Jira:", error);
+      temMais = false; 
     }
-
-    const data = await response.json();
-    return data.tasks || [];
-  } catch (error) {
-    console.error("Erro na requisição do ClickUp:", error);
-    return [];
   }
+  
+  console.log("-> Busca concluída! Total final:", todasAsTarefas.length);
+  return todasAsTarefas;
 };
 
 const calcularFila = async () => {
-  const tasks = await getClickUpData();
+  const issues = await getJiraData();
   const carga = {};
-
   const projetosUnicos = new Set();
 
-  if (tasks.length === 0) return { fila: [], totalProjetos: 0 };
+  if (!issues || issues.length === 0) return { fila: [], totalProjetos: 0 };
 
-  tasks.forEach((task) => {
-    const statusReal = task.status.status.toUpperCase();
+  issues.forEach((issue) => {
+    if (!issue.fields || !issue.fields.status || !issue.fields.status.name) return;
 
+    const statusReal = issue.fields.status.name.toUpperCase();
+
+    // Filtra pelo Status
     if (!STATUS_PERMITIDOS.includes(statusReal)) return;
 
-    if (task.assignees && task.assignees.length > 0) {
-      let temResponsavelValido = false;
+    const assignee = issue.fields.assignee;
 
-      task.assignees.forEach((assignee) => {
-        const nomeResponsavel = assignee.username;
+    if (assignee) {
+      const nomeJira = assignee.displayName || assignee.emailAddress || "";
 
-        if (USUARIOS_IGNORADOS.includes(nomeResponsavel)) return;
+      // A MÁGICA DO FILTRO: Verifica se o consultor da tarefa está na nossa lista VIP
+      const consultorValido = CONSULTORES_PERMITIDOS.find(nomeLista => 
+        nomeJira.toLowerCase().includes(nomeLista.toLowerCase())
+      );
 
-        temResponsavelValido = true;
+      // Se não for um dos nossos consultores permitidos, a gente ignora a tarefa
+      if (!consultorValido) return;
 
-        if (!carga[nomeResponsavel]) {
-          carga[nomeResponsavel] = {
-            nome: nomeResponsavel,
-            score: 0,
-            projetos: 0,
-            totalHoras: 0,
-            projetosLista: [],
-          };
-        }
+      // Usamos o nome exatamente como você escreveu na lista para o painel ficar padronizado
+      const nomeResponsavel = consultorValido;
 
-        carga[nomeResponsavel].score += PESOS[statusReal] || 0;
-        carga[nomeResponsavel].projetos += 1;
+      if (!carga[nomeResponsavel]) {
+        carga[nomeResponsavel] = {
+          nome: nomeResponsavel,
+          score: 0,
+          projetos: 0,
+          totalHoras: 0,
+          projetosLista: [],
+        };
+      }
 
-        const campoHoras = task.custom_fields?.find(
-          campo => campo.name === 'Cantidad de horas' || campo.name === 'Cantidau de horas'
-        );
+      carga[nomeResponsavel].score += PESOS[statusReal] || 0;
+      carga[nomeResponsavel].projetos += 1;
 
-        const horasConvertidas = campoHoras && campoHoras.value ? parseFloat(campoHoras.value) : 0;
+      const idCampoHoras = process.env.JIRA_CUSTOM_FIELD_HORAS; 
+      const valorHoras = idCampoHoras && issue.fields[idCampoHoras] ? issue.fields[idCampoHoras] : 0;
+      const horasConvertidas = parseFloat(valorHoras) || 0;
 
-        carga[nomeResponsavel].totalHoras += horasConvertidas;
+      carga[nomeResponsavel].totalHoras += horasConvertidas;
 
-        carga[nomeResponsavel].projetosLista.push({
-          id: task.id,
-          nome: task.name,
-          status: statusReal,
-          horas: horasConvertidas
-        });
+      carga[nomeResponsavel].projetosLista.push({
+        id: issue.key,
+        nome: issue.fields.summary || "Sem Título",
+        status: statusReal,
+        horas: horasConvertidas
       });
 
-      if (temResponsavelValido) {
-        projetosUnicos.add(task.id);
-      }
+      projetosUnicos.add(issue.key);
     }
   });
 
   const filaOrdenada = Object.values(carga).sort((a, b) => a.score - b.score);
 
-  console.log("\n=== CÁLCULO DE CARGA ATUALIZADO ===");
+  console.log("\n=== CÁLCULO DE CARGA ATUALIZADO (JIRA) ===");
   filaOrdenada.forEach((c) => {
-    console.log(
-      `[Score: ${c.score.toString().padStart(3, " ")}] - Consultor: ${c.nome} | Projetos Ativos: ${c.projetos}`,
-    );
+    console.log(`[Score: ${c.score.toString().padStart(3, " ")}] - Consultor: ${c.nome} | Projetos Ativos: ${c.projetos}`);
   });
-  console.log("===================================\n");
+  console.log("==========================================\n");
 
   return {
     fila: filaOrdenada,
@@ -134,20 +155,4 @@ const calcularFila = async () => {
   };
 };
 
-app.get("/api/dashboard", async (req, res) => {
-  try {
-    const resultado = await calcularFila();
-    res.json({
-      fila: resultado.fila,
-      proximo: resultado.fila[0] || null,
-      totalProjetos: resultado.totalProjetos,
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao buscar dados" });
-  }
-});
-
-const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
+module.exports = { calcularFila };

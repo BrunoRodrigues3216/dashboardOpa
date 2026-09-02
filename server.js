@@ -11,14 +11,27 @@ console.log("-> Servindo arquivos da Pasta:", distPath);
 
 app.use(express.static(distPath));
 
-app.get('/api/dashboard', async (req, res) => {
-    try {
-        const fila = await calcularFila();
-        const proximo = fila[0];
-        res.json({ fila, proximo });
-    } catch (error) {
-        res.status(500).json({ error: 'Erro ao processar dados' });
-    }
+app.get("/api/dashboard", async (req, res) => {
+  try {
+    const resultado = await calcularFila();
+    
+    // 1. A MÁGICA: Cria uma fila secundária removendo você do sorteio
+    const consultoresElegiveis = resultado.fila.filter(
+      (c) => c.nome !== "Bruno Gabriel Rodrigues"
+    );
+    
+    // 2. Define o "Próximo" pegando o primeiro da fila de elegíveis
+    const proximo = consultoresElegiveis.length > 0 ? consultoresElegiveis[0] : null;
+
+    res.json({
+      fila: resultado.fila, // Você continua aparecendo na tabela geral
+      proximo: proximo,     // Mas o Card de Destaque (Próximo) pula você!
+      totalProjetos: resultado.totalProjetos,
+    });
+  } catch (error) {
+    console.error("🔥 ERRO FATAL NO BACKEND:", error);
+    res.status(500).json({ error: "Erro ao buscar dados" });
+  }
 });
 
 
