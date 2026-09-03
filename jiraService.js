@@ -28,7 +28,7 @@ const CONSULTORES_PERMITIDOS = [
   "João Silva",
   "Diogo Basílio",
   "Luis Felipe Flores",
-  "alice.loreiro"
+  "Alice Loreiro"
 ];
 
 const getJiraData = async () => {
