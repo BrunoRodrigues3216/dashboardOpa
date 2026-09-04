@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-// 1. LISTA DE STATUS PERMITIDOS
+// LISTA DE STATUS PERMITIDOS
 const STATUS_PERMITIDOS = [
   "KICKOFF",
   "TREINAMENTO",
@@ -10,7 +10,7 @@ const STATUS_PERMITIDOS = [
   "ACOMPANHAMENTO"
 ];
 
-// 2. PONTUAÇÃO (PESOS) DOS STATUS
+// PONTUAÇÃO (PESOS) DOS STATUS
 const PESOS = {
   "KICKOFF": 5,
   "TREINAMENTO": 4,
@@ -20,7 +20,7 @@ const PESOS = {
   "ACOMPANHAMENTO": 1
 };
 
-// 3. EQUIPE DO DASHBOARD (FILTRO EXCLUSIVO)
+// EQUIPE DO DASHBOARD (FILTRO EXCLUSIVO)
 const CONSULTORES_PERMITIDOS = [
   "Luís Felipe de Carvalho Smidt",
   "Bruno Gabriel Rodrigues",
@@ -92,7 +92,7 @@ const calcularFila = async () => {
 
     const statusReal = issue.fields.status.name.toUpperCase();
 
-    // Filtra pelo Status
+   
     if (!STATUS_PERMITIDOS.includes(statusReal)) return;
 
     const assignee = issue.fields.assignee;
@@ -100,15 +100,15 @@ const calcularFila = async () => {
     if (assignee) {
       const nomeJira = assignee.displayName || assignee.emailAddress || "";
 
-      // A MÁGICA DO FILTRO: Verifica se o consultor da tarefa está na nossa lista VIP
+      
       const consultorValido = CONSULTORES_PERMITIDOS.find(nomeLista => 
         nomeJira.toLowerCase().includes(nomeLista.toLowerCase())
       );
 
-      // Se não for um dos nossos consultores permitidos, a gente ignora a tarefa
+     
       if (!consultorValido) return;
 
-      // Usamos o nome exatamente como você escreveu na lista para o painel ficar padronizado
+      
       const nomeResponsavel = consultorValido;
 
       if (!carga[nomeResponsavel]) {
