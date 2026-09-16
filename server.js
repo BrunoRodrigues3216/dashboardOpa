@@ -11,27 +11,18 @@ console.log("-> Servindo arquivos da Pasta:", distPath);
 
 app.use(express.static(distPath));
 
-app.get("/api/dashboard", async (req, res) => {
-  try {
-    const resultado = await calcularFila();
-    
-   
-    const consultoresElegiveis = resultado.fila.filter(
-      (c) => c.nome !== "Bruno Gabriel Rodrigues"
-    );
-    
-   
-    const proximo = consultoresElegiveis.length > 0 ? consultoresElegiveis[0] : null;
-
-    res.json({
-      fila: resultado.fila, 
-      proximo: proximo,     
-      totalProjetos: resultado.totalProjetos,
-    });
-  } catch (error) {
-    console.error("🔥 ERRO FATAL NO BACKEND:", error);
-    res.status(500).json({ error: "Erro ao buscar dados" });
-  }
+app.get('/api/dashboard', async (req, res) => {
+    try {
+        const resultado = await calcularFila();
+        
+        res.json({ 
+            fila: resultado.fila || [], 
+            totalProjetos: resultado.totalProjetos 
+        });
+    } catch (error) {
+        console.error("🔥 Erro fatal na rota:", error);
+        res.status(500).json({ error: 'Erro ao processar dados' });
+    }
 });
 
 

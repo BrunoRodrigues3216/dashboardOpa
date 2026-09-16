@@ -1,35 +1,31 @@
 require('dotenv').config();
 
-// LISTA DE STATUS PERMITIDOS
 const STATUS_PERMITIDOS = [
   "KICKOFF",
   "TREINAMENTO",
   "ATIVAÇÃO DE CANAIS",
-  "GO-LIVE",
   "TELEFONIA",
+  "GO-LIVE",
+  "EM PAUSA",
   "ACOMPANHAMENTO"
 ];
 
-// PONTUAÇÃO (PESOS) DOS STATUS
-const PESOS = {
+const PESOS_STATUS = {
   "KICKOFF": 5,
   "TREINAMENTO": 4,
   "ATIVAÇÃO DE CANAIS": 3,
   "TELEFONIA": 2,
   "GO-LIVE": 1,
+  "EM PAUSA": 0,
   "ACOMPANHAMENTO": 1
 };
 
-// EQUIPE DO DASHBOARD (FILTRO EXCLUSIVO)
-const CONSULTORES_PERMITIDOS = [
-  "Luís Felipe de Carvalho Smidt",
-  "Bruno Gabriel Rodrigues",
-  "Warley Rubas",
-  "João Silva",
-  "Diogo Basílio",
-  "Luis Felipe Flores",
-  "alice.loreiro"
-];
+const PESOS_NIVEL = {
+  "START": 0, "PLUS": 0, "PREMIUM": 0, "PRO": 0
+};
+
+const EQUIPE_BASICO = ["Bruno Gabriel Rodrigues","Alice Loreiro", "Diogo Basílio","Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
+const EQUIPE_COMPLEXO = ["Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
 
 const getJiraData = async () => {
   const jql = `statusCategory != Done`;
@@ -40,10 +36,10 @@ const getJiraData = async () => {
   const maxResults = 100;  
   let temMais = true;      
 
-  console.log("-> Iniciando busca no Jira. Aguarde...");
+  console.log("-> Iniciando busca no Jira (Com Histórico e Atualizações)...");
 
   while (temMais) {
-    const url = `https://${process.env.JIRA_DOMAIN}.atlassian.net/rest/agile/1.0/board/${process.env.JIRA_BOARD_ID}/issue?jql=${encodeURIComponent(jql)}&startAt=${startAt}&maxResults=${maxResults}`;
+    const url = `https://${process.env.JIRA_DOMAIN}.atlassian.net/rest/agile/1.0/board/${process.env.JIRA_BOARD_ID}/issue?jql=${encodeURIComponent(jql)}&startAt=${startAt}&maxResults=${maxResults}&expand=changelog`;
 
     try {
       const response = await fetch(url, {
@@ -55,16 +51,11 @@ const getJiraData = async () => {
         },
       });
 
-      if (!response.ok) {
-        throw new Error(`Erro API Jira: ${response.status} - ${response.statusText}`);
-      }
-
+      if (!response.ok) throw new Error(`Erro API Jira: ${response.status}`);
       const data = await response.json();
       
       if (data.issues && data.issues.length > 0) {
         todasAsTarefas = todasAsTarefas.concat(data.issues);
-        console.log(`-> Puxou ${data.issues.length} tarefas (Total até agora: ${todasAsTarefas.length} de ${data.total})`);
-        
         startAt += data.issues.length; 
         if (startAt >= data.total) temMais = false; 
       } else {
@@ -75,8 +66,6 @@ const getJiraData = async () => {
       temMais = false; 
     }
   }
-  
-  console.log("-> Busca concluída! Total final:", todasAsTarefas.length);
   return todasAsTarefas;
 };
 
@@ -91,8 +80,6 @@ const calcularFila = async () => {
     if (!issue.fields || !issue.fields.status || !issue.fields.status.name) return;
 
     const statusReal = issue.fields.status.name.toUpperCase();
-
-   
     if (!STATUS_PERMITIDOS.includes(statusReal)) return;
 
     const assignee = issue.fields.assignee;
@@ -100,20 +87,23 @@ const calcularFila = async () => {
     if (assignee) {
       const nomeJira = assignee.displayName || assignee.emailAddress || "";
 
-      
-      const consultorValido = CONSULTORES_PERMITIDOS.find(nomeLista => 
-        nomeJira.toLowerCase().includes(nomeLista.toLowerCase())
-      );
+      let equipe = null;
+      let nomeFormatado = "";
 
-     
-      if (!consultorValido) return;
+      if (EQUIPE_BASICO.some(n => nomeJira.toLowerCase().includes(n.toLowerCase()))) {
+        equipe = "BASICO";
+        nomeFormatado = EQUIPE_BASICO.find(n => nomeJira.toLowerCase().includes(n.toLowerCase()));
+      } else if (EQUIPE_COMPLEXO.some(n => nomeJira.toLowerCase().includes(n.toLowerCase()))) {
+        equipe = "COMPLEXO";
+        nomeFormatado = EQUIPE_COMPLEXO.find(n => nomeJira.toLowerCase().includes(n.toLowerCase()));
+      }
 
-      
-      const nomeResponsavel = consultorValido;
+      if (!equipe) return;
 
-      if (!carga[nomeResponsavel]) {
-        carga[nomeResponsavel] = {
-          nome: nomeResponsavel,
+      if (!carga[nomeFormatado]) {
+        carga[nomeFormatado] = {
+          nome: nomeFormatado,
+          equipe: equipe,
           score: 0,
           projetos: 0,
           totalHoras: 0,
@@ -121,34 +111,68 @@ const calcularFila = async () => {
         };
       }
 
-      carga[nomeResponsavel].score += PESOS[statusReal] || 0;
-      carga[nomeResponsavel].projetos += 1;
+      const idCampoNivel = process.env.JIRA_CUSTOM_FIELD_NIVEL; 
+      let nivelRaw = "START"; 
+      if (idCampoNivel && issue.fields[idCampoNivel]) {
+        nivelRaw = issue.fields[idCampoNivel].value || issue.fields[idCampoNivel];
+      }
+      const nivel = typeof nivelRaw === 'string' ? nivelRaw.toUpperCase() : "START";
+
+      const pesoStatus = PESOS_STATUS[statusReal] || 0;
+      const pesoNivel = PESOS_NIVEL[nivel] || 1;
+      const scoreTotalProjeto = pesoStatus;
+
+      carga[nomeFormatado].score += scoreTotalProjeto;
+      carga[nomeFormatado].projetos += 1;
 
       const idCampoHoras = process.env.JIRA_CUSTOM_FIELD_HORAS; 
       const valorHoras = idCampoHoras && issue.fields[idCampoHoras] ? issue.fields[idCampoHoras] : 0;
       const horasConvertidas = parseFloat(valorHoras) || 0;
+      carga[nomeFormatado].totalHoras += horasConvertidas;
 
-      carga[nomeResponsavel].totalHoras += horasConvertidas;
+      const historicoStatus = [];
+      if (issue.changelog && issue.changelog.histories) {
+        issue.changelog.histories.forEach(historia => {
+          historia.items.forEach(item => {
+            if (item.field === 'status') {
+              historicoStatus.push({
+                data: historia.created,
+                de: item.fromString || "Anterior",
+                para: item.toString || "Novo"
+              });
+            }
+          });
+        });
+      }
+      historicoStatus.sort((a, b) => new Date(b.data) - new Date(a.data));
 
-      carga[nomeResponsavel].projetosLista.push({
+      const dataUltimaAtualizacao = issue.fields.updated || new Date().toISOString();
+
+      carga[nomeFormatado].projetosLista.push({
         id: issue.key,
         nome: issue.fields.summary || "Sem Título",
         status: statusReal,
-        horas: horasConvertidas
+        nivel: nivel,
+        horas: horasConvertidas,
+        scoreProjeto: scoreTotalProjeto,
+        historico: historicoStatus,
+        ultimaAtualizacao: dataUltimaAtualizacao // Enviando pro Dashboard!
       });
+
+      const filaOrdenada = Object.values(carga).sort((a, b) => a.score - b.score);
+
+      console.log("\n=== CÁLCULO DE CARGA ATUALIZADO (JIRA) ===");
+        filaOrdenada.forEach((c) => {
+          console.log(`[Score: ${c.score.toString().padStart(3, " ")}] - Consultor: ${c.nome} | Projetos Ativos: ${c.projetos}`);
+        });
+        console.log("==========================================\n");
 
       projetosUnicos.add(issue.key);
     }
   });
 
   const filaOrdenada = Object.values(carga).sort((a, b) => a.score - b.score);
-
-  console.log("\n=== CÁLCULO DE CARGA ATUALIZADO (JIRA) ===");
-  filaOrdenada.forEach((c) => {
-    console.log(`[Score: ${c.score.toString().padStart(3, " ")}] - Consultor: ${c.nome} | Projetos Ativos: ${c.projetos}`);
-  });
-  console.log("==========================================\n");
-
+  console.log(projetosUnicos)
   return {
     fila: filaOrdenada,
     totalProjetos: projetosUnicos.size,
