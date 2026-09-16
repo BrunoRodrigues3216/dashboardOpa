@@ -1,30 +1,34 @@
 require('dotenv').config();
 
 const STATUS_PERMITIDOS = [
+  "PRÉ-KICKOFF",
   "KICKOFF",
   "TREINAMENTO",
-  "ATIVAÇÃO DE CANAIS",
-  "TELEFONIA",
-  "GO-LIVE",
-  "EM PAUSA",
-  "ACOMPANHAMENTO"
+  "ATIVAÇÃO",
+  "ATIVAÇÃO DE CANAIS", 
+  "ACOMPANHAMENTO",
+  "EM PAUSA" // <- Adicionado para o Backend enviar os pausados pro App.jsx tratar
 ];
 
 const PESOS_STATUS = {
-  "KICKOFF": 5,
-  "TREINAMENTO": 4,
+  "PRÉ-KICKOFF": 10,
+  "KICKOFF": 8,
+  "TREINAMENTO": 5,
+  "ATIVAÇÃO": 3,
   "ATIVAÇÃO DE CANAIS": 3,
-  "TELEFONIA": 2,
-  "GO-LIVE": 1,
-  "EM PAUSA": 0,
-  "ACOMPANHAMENTO": 1
+  "ACOMPANHAMENTO": 1,
+  "EM PAUSA": 0
 };
 
+// Mantemos a sua lógica de Equipes (Básico/Complexo) que é a correta pro Dashboard atual
 const PESOS_NIVEL = {
-  "START": 0, "PLUS": 0, "PREMIUM": 0, "PRO": 0
+  "START": 1,
+  "PLUS": 4,
+  "PREMIUM": 6,
+  "PRO": 10
 };
 
-const EQUIPE_BASICO = ["Bruno Gabriel Rodrigues","Alice Loreiro", "Diogo Basílio","Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
+const EQUIPE_BASICO = ["Alice Loreiro", "Diogo Basílio"];
 const EQUIPE_COMPLEXO = ["Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
 
 const getJiraData = async () => {
@@ -36,7 +40,7 @@ const getJiraData = async () => {
   const maxResults = 100;  
   let temMais = true;      
 
-  console.log("-> Iniciando busca no Jira (Com Histórico e Atualizações)...");
+  console.log("-> Iniciando busca no Jira (Com Histórico de Status e Atualizações)...");
 
   while (temMais) {
     const url = `https://${process.env.JIRA_DOMAIN}.atlassian.net/rest/agile/1.0/board/${process.env.JIRA_BOARD_ID}/issue?jql=${encodeURIComponent(jql)}&startAt=${startAt}&maxResults=${maxResults}&expand=changelog`;
@@ -120,7 +124,7 @@ const calcularFila = async () => {
 
       const pesoStatus = PESOS_STATUS[statusReal] || 0;
       const pesoNivel = PESOS_NIVEL[nivel] || 1;
-      const scoreTotalProjeto = pesoStatus;
+      const scoreTotalProjeto = pesoStatus + pesoNivel;
 
       carga[nomeFormatado].score += scoreTotalProjeto;
       carga[nomeFormatado].projetos += 1;
@@ -146,6 +150,7 @@ const calcularFila = async () => {
       }
       historicoStatus.sort((a, b) => new Date(b.data) - new Date(a.data));
 
+      // 👇 Pegando a data exata da última interação no cartão (Comentário, Anexo, etc)
       const dataUltimaAtualizacao = issue.fields.updated || new Date().toISOString();
 
       carga[nomeFormatado].projetosLista.push({
@@ -156,23 +161,15 @@ const calcularFila = async () => {
         horas: horasConvertidas,
         scoreProjeto: scoreTotalProjeto,
         historico: historicoStatus,
-        ultimaAtualizacao: dataUltimaAtualizacao // Enviando pro Dashboard!
+        ultimaAtualizacao: dataUltimaAtualizacao // <- Mandando para o Dashboard
       });
-
-      const filaOrdenada = Object.values(carga).sort((a, b) => a.score - b.score);
-
-      console.log("\n=== CÁLCULO DE CARGA ATUALIZADO (JIRA) ===");
-        filaOrdenada.forEach((c) => {
-          console.log(`[Score: ${c.score.toString().padStart(3, " ")}] - Consultor: ${c.nome} | Projetos Ativos: ${c.projetos}`);
-        });
-        console.log("==========================================\n");
 
       projetosUnicos.add(issue.key);
     }
   });
 
   const filaOrdenada = Object.values(carga).sort((a, b) => a.score - b.score);
-  console.log(projetosUnicos)
+  
   return {
     fila: filaOrdenada,
     totalProjetos: projetosUnicos.size,
