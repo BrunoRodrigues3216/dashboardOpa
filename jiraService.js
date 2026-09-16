@@ -28,7 +28,7 @@ const PESOS_NIVEL = {
   "PRO": 10
 };
 
-const EQUIPE_BASICO = ["Alice Loreiro", "Diogo Basílio"];
+const EQUIPE_BASICO = ["Bruno Gabriel Rodrigues","Alice Loreiro", "Diogo Basílio","Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
 const EQUIPE_COMPLEXO = ["Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
 
 const getJiraData = async () => {
