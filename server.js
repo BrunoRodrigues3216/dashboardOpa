@@ -17,7 +17,8 @@ app.get('/api/dashboard', async (req, res) => {
         
         res.json({ 
             fila: resultado.fila || [], 
-            totalProjetos: resultado.totalProjetos 
+            totalProjetos: resultado.totalProjetos ,
+            metricasMes: resultado.metricasMes
         });
     } catch (error) {
         console.error("🔥 Erro fatal na rota:", error);
