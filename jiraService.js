@@ -7,11 +7,12 @@ const STATUS_PERMITIDOS = [
   "ATIVAÇÃO DE CANAIS",
   "GO-LIVE",
   "ACOMPANHAMENTO",
+  "TELEFONIA",
   "EM PAUSA" 
 ];
 
 const PESOS_STATUS = {
-  "KICKOFF": 8, "TREINAMENTO": 5,
+  "KICKOFF": 8, "TREINAMENTO": 5,"TELEFONIA":4,
   "ATIVAÇÃO": 3, "ATIVAÇÃO DE CANAIS": 3,"GO-LIVE":1, "ACOMPANHAMENTO": 1, "EM PAUSA": 0
 };
 
@@ -208,6 +209,7 @@ const calcularFila = async () => {
       projetosUnicos.add(issue.key);
     }
   });
+
 
   const filaOrdenada = Object.values(carga).sort((a, b) => a.score - b.score);
   

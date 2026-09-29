@@ -1,10 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { calcularFila } = require('./jiraService.js'); 
+const { calcularFila } = require('./jiraService.js');
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 const distPath = path.join(__dirname, 'dist');
 console.log("-> Servindo arquivos da Pasta:", distPath);
@@ -25,7 +26,6 @@ app.get('/api/dashboard', async (req, res) => {
         res.status(500).json({ error: 'Erro ao processar dados' });
     }
 });
-
 
 app.use((req, res) => {
     // Radar 2: Mostra no terminal qual rota o navegador tentou acessar
