@@ -20,8 +20,8 @@ const PESOS_NIVEL = {
   "START": 1, "PLUS": 4, "PREMIUM": 6, "PRO": 10
 };
 
-const EQUIPE_BASICO = ["Bruno Gabriel Rodrigues","Alice Loreiro", "Diogo Basílio","Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
-const EQUIPE_COMPLEXO = ["Bruno Gabriel Rodrigues","Alice Loreiro", "Diogo Basílio","Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
+const EQUIPE_BASICO = ["Bruno Gabriel Rodrigues", "Diogo Basílio","Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
+const EQUIPE_COMPLEXO = ["Bruno Gabriel Rodrigues", "Diogo Basílio","Luis Felipe Flores", "Warley Rubas", "João Silva", "Luís Felipe de Carvalho Smidt"];
 
 
 const getTotalFinalizados = async () => {
